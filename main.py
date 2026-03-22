@@ -535,6 +535,47 @@ class BotEngine:
         if was_running: await self.start()
         await self._emit()
 
+    async def switch_mode(self, mode: BotMode):
+        # Close open trade first
+        if self.open_trade:
+            await self._force_close()
+        was_running = self.running
+        if self.running:
+            await self.stop()
+        # Switch mode
+        self.config.mode = mode
+        await hl.switch_mode(mode)
+        # Balance sync
+        if mode == BotMode.LIVE:
+            wallet = os.getenv("HL_WALLET_ADDRESS", "")
+            if wallet:
+                bal = await hl.get_usdc_balance(wallet)
+                if bal > 0:
+                    self.balance = self.start_bal = bal
+                    logger.info(f"LIVE balance: ${bal:.4f} USDC")
+                else:
+                    logger.warning("Live balance = 0 — check HL_WALLET_ADDRESS in Render env")
+            else:
+                logger.warning("HL_WALLET_ADDRESS not set in Render env!")
+        else:
+            # Paper mode — restore paper balance from Supabase
+            rows = await supa_get("settings", {"id": "default"})
+            paper_bal = rows[0].get("balance", self.config.balance) if rows else self.config.balance
+            self.balance = self.start_bal = paper_bal
+            logger.info(f"PAPER balance: ${self.balance:.4f}")
+        # Save to Supabase
+        await supa_upsert("bot_state", {
+            "id": "default",
+            "mode": mode.value,
+            "balance": self.balance,
+            "start_balance": self.start_bal,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        })
+        if was_running:
+            await self.start()
+        logger.info(f"Mode switched to {mode.value.upper()}")
+        await self._emit()
+
     def reset(self, new_bal: Optional[float] = None):
         if self.open_trade: return False, "Cannot reset with open trade"
         b = new_bal or self.config.balance
