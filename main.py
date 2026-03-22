@@ -21,7 +21,6 @@ from pydantic import BaseModel
 try:
     from dotenv import load_dotenv
     load_dotenv()
-import os; PORT = int(os.getenv("PORT", 8000))
 except ImportError:
     pass
 
