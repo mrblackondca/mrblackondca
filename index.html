@@ -329,7 +329,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
       </div>
       <div class="srow2">
         <button class="btn-save" onclick="saveSettings()">💾 SAVE</button>
-        <button onclick="resetPaper()" style="background:rgba(255,112,67,.12);color:var(--orange);border:1px solid rgba(255,112,67,.3);padding:11px;border-radius:10px;font-family:'Syne',sans-serif;font-weight:800;font-size:12px;cursor:pointer;">🔄 RESET PAPER</button>
+        <button id="resetBtn" onclick="resetPaper()" style="background:rgba(255,112,67,.12);color:var(--orange);border:1px solid rgba(255,112,67,.3);padding:11px;border-radius:10px;font-family:'Syne',sans-serif;font-weight:800;font-size:12px;cursor:pointer;">🔄 RESET PAPER</button>
       </div>
       <!-- Backend URL -->
       <div style="padding-top:12px;border-top:1px solid var(--border);">
@@ -550,9 +550,11 @@ function applyMode(){
   if(S.live){
     sw.classList.add('on'); tag.className='mtag l'; tag.textContent='LIVE';
     md.textContent='LIVE'; md.className='sc-val r'; ms.textContent='Real money'; ms.className='sc-sub dn';
+    const rb=document.getElementById('resetBtn'); if(rb) rb.style.display='none';
   } else {
     sw.classList.remove('on'); tag.className='mtag p'; tag.textContent='PAPER';
     md.textContent='PAPER'; md.className='sc-val p'; ms.textContent='Simulation'; ms.className='sc-sub';
+    const rb=document.getElementById('resetBtn'); if(rb) rb.style.display='block';
   }
 }
 
@@ -752,9 +754,9 @@ async function saveSettings(){
     vol:+document.getElementById('cVol').value};
   const newBal=+document.getElementById('cBal').value;
   if(S.beOk){
-    await api('/bot/config','PUT',{trade_pct:S.cfg.pct,tp1:S.cfg.tp,sl:S.cfg.sl,
+    const r=await api('/bot/config','PUT',{trade_pct:S.cfg.pct,tp1:S.cfg.tp,sl:S.cfg.sl,
       tp1_close_pct:S.cfg.tpPct,trail_stop:S.cfg.trail,rsi_entry:S.cfg.rsi,vol_mult:S.cfg.vol});
-    await api(`/bot/reset?balance=${newBal}`,'POST');
+    toast(r&&r.success?'Settings Saved ✅':'Save failed ❌', r&&r.success?'s':'e'); return;
   } else {
     S.startBal=newBal; S.balance=newBal; S.trades=[]; S.open=null;
     document.getElementById('tradeBox').classList.remove('show');
