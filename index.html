@@ -270,6 +270,22 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
   <button class="btn-start" id="startBtn" onclick="startBot()">▶ START BOT</button>
 </div>
 
+
+<!-- BOT LIVE STATUS BOX -->
+<div id="botLiveBox" style="margin:10px 16px 0;background:var(--bg2);border:1px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:var(--cs);">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--bg3);">
+    <div style="font-size:9px;color:var(--text3);letter-spacing:2.5px;font-family:'Space Mono',monospace;">BOT LIVE STATUS</div>
+    <div id="botLiveDot" style="width:8px;height:8px;border-radius:50%;background:var(--text3);"></div>
+  </div>
+  <div style="padding:12px 14px;">
+    <div id="botLiveMsg" style="font-size:12px;font-family:'Space Mono',monospace;color:var(--text2);word-break:break-all;">⏳ Bot idle — press start</div>
+    <div style="display:flex;justify-content:space-between;margin-top:8px;">
+      <span style="font-size:9px;color:var(--text3);font-family:'Space Mono',monospace;" id="botLiveTime">—</span>
+      <span style="font-size:9px;font-family:'Space Mono',monospace;" id="botLiveMode">—</span>
+    </div>
+  </div>
+</div>
+
 <!-- MAIN -->
 <div class="main">
 
@@ -446,9 +462,9 @@ function initBackend(){
     if(S.ws) S.ws.close();
     S.ws = new WebSocket(WS_URL);
     S.ws.onopen = ()=>{
-      S.beOk = true; updateBeStatus(true);
+      const wasOk=S.beOk; S.beOk=true; updateBeStatus(true);
       clearInterval(S.tick);
-      toast('Backend connected ✅','s');
+      if(!wasOk) toast('Backend connected ✅','s');
     };
     S.ws.onmessage = e=>{
       try{
@@ -457,8 +473,8 @@ function initBackend(){
         if(msg.type==='ping') S.ws.send('ping');
       }catch(err){}
     };
-    S.ws.onerror = ()=>{ S.beOk=false; updateBeStatus(false); };
-    S.ws.onclose = ()=>{ S.beOk=false; updateBeStatus(false); setTimeout(()=>{if(S.useBackend)initBackend();},5000); };
+    S.ws.onerror = ()=>{ S.beOk=false; };
+    S.ws.onclose = ()=>{ S.beOk=false; updateBeStatus(false); setTimeout(()=>{if(S.useBackend)initBackend();},8000); };
     setInterval(()=>{ if(S.ws&&S.ws.readyState===1) S.ws.send('ping'); },25000);
   }catch(e){ console.error('WS',e); }
 }
@@ -555,15 +571,40 @@ function applyStatus(d){
   if(d.last_signal){
     const sig = d.last_signal;
     setSig(sig.includes('🚀')||sig.includes('ENTRY')?'entry':sig.includes('✅')||sig.includes('HIT')?'exit':'wait', sig);
+    // Update live status box
+    const liveMsg  = document.getElementById('botLiveMsg');
+    const liveTime = document.getElementById('botLiveTime');
+    const liveDot  = document.getElementById('botLiveDot');
+    const liveMode = document.getElementById('botLiveMode');
+    if(liveMsg)  liveMsg.textContent  = sig;
+    if(liveTime) liveTime.textContent = new Date().toLocaleTimeString();
+    if(liveDot){
+      if(sig.includes('🚀')||sig.includes('ENTRY'))      { liveDot.style.background='var(--green)'; liveDot.style.boxShadow='0 0 8px var(--green)'; }
+      else if(sig.includes('✅')||sig.includes('HIT'))   { liveDot.style.background='var(--yellow)'; liveDot.style.boxShadow='0 0 8px var(--yellow)'; }
+      else if(sig.includes('❌')||sig.includes('STOP'))  { liveDot.style.background='var(--red)'; liveDot.style.boxShadow='0 0 8px var(--red)'; }
+      else if(sig.includes('HOLD')||sig.includes('📊'))  { liveDot.style.background='var(--accent)'; liveDot.style.boxShadow='0 0 8px var(--accent)'; }
+      else { liveDot.style.background='var(--text3)'; liveDot.style.boxShadow='none'; }
+    }
+    if(liveMode && d.mode) liveMode.textContent = d.mode.toUpperCase() + ' MODE';
+    if(liveMode) liveMode.style.color = d.mode==='live'?'var(--red)':'var(--yellow)';
   }
 
   // Mode + buttons
   applyMode(); updateBotBtns();
 
-  // Wallet balance in live
-  if(S.live){
+  // Wallet + balance persist
+  if(d.mode==='live'){
     const wb=document.getElementById('wBal');
     if(wb){ wb.textContent=`$${S.balance.toFixed(4)} USDC`; wb.style.display='block'; }
+  }
+  // Restore wallet from Supabase if not set
+  if(!S.wallet && S.beOk){
+    api('/wallet/saved').then(r=>{
+      if(r&&r.address&&r.connected){
+        S.wallet=r.address; S.walletBal=r.usdc_balance;
+        updateWalletUI();
+      }
+    }).catch(()=>{});
   }
 }
 
@@ -831,6 +872,11 @@ function toast(msg,type='i'){
 }
 
 // ── INIT ──────────────────────────────────────────
+// Load saved theme
+const _theme=localStorage.getItem('theme')||'dark';
+S.theme=_theme;
+document.documentElement.setAttribute('data-theme',_theme);
+document.getElementById('themeBtn').textContent=_theme==='dark'?'🌙':'☀️';
 updateStats(); updateInds();
 const _saved=localStorage.getItem('beUrl');
 if(_saved){
