@@ -674,9 +674,13 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"],
 
 
 # ── ROUTES ───────────────────────────────────────────────────────
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse)
 async def root():
-    return {"name":"DCA Bot","version":"1.0.0","docs":"/docs"}
+    try:
+        with open("index.html", "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read())
+    except FileNotFoundError:
+        return HTMLResponse(content="<h1>index.html not found!</h1>")
 
 @app.get("/api/v1/health")
 async def health():
