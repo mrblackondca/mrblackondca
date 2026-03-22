@@ -26,6 +26,17 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 [data-theme="dark"] body::before{content:'';position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse 60% 40% at 10% 0%,rgba(0,198,255,.04) 0%,transparent 70%),radial-gradient(ellipse 50% 50% at 90% 100%,rgba(0,232,122,.03) 0%,transparent 70%);}
 ::-webkit-scrollbar{width:3px;height:3px;}::-webkit-scrollbar-track{background:transparent;}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
 
+
+.login-overlay{position:fixed;inset:0;background:var(--bg);z-index:999;display:flex;align-items:center;justify-content:center;padding:20px;}
+.login-box{background:var(--bg2);border:1px solid var(--border2);border-radius:18px;padding:32px 24px;width:100%;max-width:320px;box-shadow:var(--shadow);text-align:center;}
+.login-ico{font-size:40px;margin-bottom:12px;}
+.login-title{font-family:'Syne',sans-serif;font-size:20px;font-weight:800;margin-bottom:6px;}
+.login-sub{font-size:11px;color:var(--text2);font-family:'Space Mono',monospace;margin-bottom:24px;}
+.login-inp{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px 16px;color:var(--text);font-family:'Space Mono',monospace;font-size:14px;outline:none;text-align:center;letter-spacing:3px;margin-bottom:14px;}
+.login-inp:focus{border-color:var(--accent);}
+.login-btn{width:100%;background:linear-gradient(135deg,var(--accent),#0070bb);color:#fff;border:none;padding:13px;border-radius:10px;font-family:'Syne',sans-serif;font-weight:800;font-size:14px;cursor:pointer;}
+.login-err{font-size:11px;color:var(--red);font-family:'Space Mono',monospace;margin-top:10px;min-height:16px;}
+
 /* HEADER */
 .hdr{background:var(--bg2);border-bottom:1px solid var(--border);padding:12px 16px;position:sticky;top:0;z-index:99;backdrop-filter:blur(20px);}
 [data-theme="dark"] .hdr{background:rgba(12,17,24,.92);}
@@ -200,6 +211,18 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 </style>
 </head>
 <body>
+
+<!-- LOGIN -->
+<div class="login-overlay" id="loginOverlay">
+  <div class="login-box">
+    <div class="login-ico">🔐</div>
+    <div class="login-title">DCA <span style="color:var(--accent)">BOT</span></div>
+    <div class="login-sub">ENTER PASSWORD TO CONTINUE</div>
+    <input class="login-inp" type="password" id="pwdInput" placeholder="••••••••" onkeydown="if(event.key==='Enter')checkLogin()">
+    <button class="login-btn" onclick="checkLogin()">UNLOCK</button>
+    <div class="login-err" id="loginErr"></div>
+  </div>
+</div>
 
 <!-- HEADER -->
 <div class="hdr">
@@ -377,6 +400,26 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 <div class="tst" id="tst"></div>
 
 <script>
+
+const AUTH_KEY = 'dca_auth';
+function isLoggedIn(){ return localStorage.getItem(AUTH_KEY)==='ok'; }
+async function checkLogin(){
+  const pwd = document.getElementById('pwdInput').value;
+  if(!pwd){ document.getElementById('loginErr').textContent='Enter password'; return; }
+  try{
+    const r = await fetch(API+'/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:pwd})});
+    const d = await r.json();
+    if(d.success){
+      localStorage.setItem(AUTH_KEY,'ok');
+      document.getElementById('loginOverlay').style.display='none';
+      initBackend();
+    } else {
+      document.getElementById('loginErr').textContent='Wrong password!';
+    }
+  }catch(e){ document.getElementById('loginErr').textContent='Backend not connected!'; }
+}
+window.addEventListener('load',()=>{ if(isLoggedIn()) document.getElementById('loginOverlay').style.display='none'; });
+
 // ── BACKEND CONFIG ────────────────────────────────
 // Auto-detect: UI aur backend same server pe hain!
 const ORIGIN = window.location.origin;
