@@ -25,6 +25,76 @@ except ImportError:
     pass
 
 
+
+# ═══════════════════════════════════════════════════════════════
+#  SUPABASE REST API  (HTTP — works on Render free tier IPv6)
+# ═══════════════════════════════════════════════════════════════
+SUPA_URL = os.getenv("SUPABASE_URL", "")
+SUPA_KEY = os.getenv("SUPABASE_KEY", "")
+
+async def supa_get(table: str, eq: dict = None) -> list:
+    """Fetch rows from Supabase table."""
+    if not SUPA_URL or not SUPA_KEY:
+        return []
+    try:
+        url     = f"{SUPA_URL}/rest/v1/{table}"
+        params  = {"select": "*"}
+        if eq:
+            for k, v in eq.items():
+                params[f"{k}"] = f"eq.{v}"
+        async with httpx.AsyncClient() as c:
+            r = await c.get(url, params=params, headers={
+                "apikey": SUPA_KEY,
+                "Authorization": f"Bearer {SUPA_KEY}"
+            }, timeout=10)
+        return r.json() if r.status_code == 200 else []
+    except Exception as e:
+        logger.error(f"supa_get: {e}")
+        return []
+
+async def supa_upsert(table: str, data: dict) -> bool:
+    """Upsert row in Supabase table."""
+    if not SUPA_URL or not SUPA_KEY:
+        return False
+    try:
+        async with httpx.AsyncClient() as c:
+            r = await c.post(
+                f"{SUPA_URL}/rest/v1/{table}",
+                json=data,
+                headers={
+                    "apikey": SUPA_KEY,
+                    "Authorization": f"Bearer {SUPA_KEY}",
+                    "Content-Type": "application/json",
+                    "Prefer": "resolution=merge-duplicates"
+                },
+                timeout=10
+            )
+        return r.status_code in [200, 201]
+    except Exception as e:
+        logger.error(f"supa_upsert: {e}")
+        return False
+
+async def supa_insert(table: str, data: dict) -> bool:
+    """Insert row in Supabase table."""
+    if not SUPA_URL or not SUPA_KEY:
+        return False
+    try:
+        async with httpx.AsyncClient() as c:
+            r = await c.post(
+                f"{SUPA_URL}/rest/v1/{table}",
+                json=data,
+                headers={
+                    "apikey": SUPA_KEY,
+                    "Authorization": f"Bearer {SUPA_KEY}",
+                    "Content-Type": "application/json"
+                },
+                timeout=10
+            )
+        return r.status_code in [200, 201]
+    except Exception as e:
+        logger.error(f"supa_insert: {e}")
+        return False
+
 # ═══════════════════════════════════════════════════════════════
 #  CONFIG  (reads from .env / Render environment variables)
 # ═══════════════════════════════════════════════════════════════
