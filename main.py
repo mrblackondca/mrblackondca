@@ -835,6 +835,13 @@ async def root():
 async def health():
     return {"status":"ok","ts":datetime.utcnow().isoformat()}
 
+@app.post("/api/v1/auth")
+async def auth(body: dict):
+    pwd = os.getenv("BOT_PASSWORD", "admin123")
+    if body.get("password") == pwd:
+        return {"success": True}
+    return {"success": False, "message": "Wrong password"}
+
 # Bot control
 @app.get("/api/v1/bot/status")
 async def get_status():
