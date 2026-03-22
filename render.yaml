@@ -2,6 +2,7 @@ services:
   - type: web
     name: dca-bot
     runtime: python
+    pythonVersion: "3.11.9"
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn main:app -w 1 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 120
     envVars:
@@ -9,6 +10,20 @@ services:
         value: "HYPE"
       - key: DEFAULT_BALANCE
         value: "100.0"
+      - key: DEFAULT_TRADE_PCT
+        value: "90"
+      - key: DEFAULT_TP
+        value: "1.0"
+      - key: DEFAULT_SL
+        value: "2.0"
+      - key: DEFAULT_TP_CLOSE_PCT
+        value: "50"
+      - key: DEFAULT_TRAIL
+        value: "0.5"
+      - key: DEFAULT_RSI_ENTRY
+        value: "45"
+      - key: DEFAULT_VOL_MULT
+        value: "1.5"
       - key: HL_WALLET_ADDRESS
         sync: false
       - key: HL_PRIVATE_KEY
