@@ -500,17 +500,39 @@ class BotEngine:
         for k, v in updates.items():
             if hasattr(self.config, k) and v is not None:
                 setattr(self.config, k, v)
+        asyncio.create_task(supa_upsert("settings", {
+            "id":"default",
+            "coin":self.config.coin,"balance":self.config.balance,
+            "trade_pct":self.config.trade_pct,"tp1":self.config.tp1,
+            "sl":self.config.sl,"trail_stop":self.config.trail_stop,
+            "rsi_entry":self.config.rsi_entry,"vol_mult":self.config.vol_mult,
+            "updated_at":datetime.now(timezone.utc).isoformat()
+        }))
 
     async def switch_mode(self, mode: BotMode):
         if self.open_trade: await self._force_close()
+        was_running = self.running
+        if self.running: await self.stop()
         self.config.mode = mode
         await hl.switch_mode(mode)
-        if mode == BotMode.LIVE and cfg.HL_WALLET_ADDRESS:
-            bal = await hl.get_usdc_balance(cfg.HL_WALLET_ADDRESS)
-            if bal > 0:
-                self.balance = self.start_bal = bal
-        elif mode == BotMode.PAPER:
-            self.balance = self.start_bal = self.config.balance
+        if mode == BotMode.LIVE:
+            wallet = cfg.HL_WALLET_ADDRESS or os.getenv("HL_WALLET_ADDRESS","")
+            if wallet:
+                bal = await hl.get_usdc_balance(wallet)
+                if bal > 0:
+                    self.balance = self.start_bal = bal
+                    logger.info(f"LIVE balance: ${bal:.4f} USDC")
+        else:
+            rows = await supa_get("settings", {"id": "default"})
+            paper_bal = rows[0].get("balance", self.config.balance) if rows else self.config.balance
+            self.balance = self.start_bal = paper_bal
+        # Save mode to Supabase
+        await supa_upsert("bot_state", {
+            "id": "default", "mode": mode.value,
+            "balance": self.balance, "start_balance": self.start_bal,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        })
+        if was_running: await self.start()
         await self._emit()
 
     def reset(self, new_bal: Optional[float] = None):
@@ -647,6 +669,23 @@ class BotEngine:
         self.signal = (f"{'✅' if net>=0 else '❌'} CLOSED ({reason.value}) | "
                        f"Net: {'+' if net>=0 else ''}${net:.4f}")
         logger.info(f"Closed #{t.id} | {reason} | net={net:.4f} | bal={self.balance:.4f}")
+        # Save trade + balance to Supabase
+        asyncio.create_task(supa_insert("trades", {
+            "trade_id":ct.id,"coin":ct.coin,
+            "entry_price":ct.entry_price,"exit_price":ct.exit_price,
+            "amount":ct.amount,"entry_fee":ct.entry_fee,"exit_fee":ct.exit_fee,
+            "gas_fee":0.0,"swap_fee":0.0,"maker_fee":0.0,
+            "taker_fee":ct.taker_fee,"total_fees":ct.total_fees,
+            "gross_pnl":ct.gross_pnl,"net_pnl":ct.net_pnl,"pnl_pct":ct.pnl_pct,
+            "reason":ct.reason.value,
+            "opened_at":ct.opened_at.isoformat(),"closed_at":ct.closed_at.isoformat(),
+            "duration_seconds":ct.duration_seconds,"mode":self.config.mode.value
+        }))
+        asyncio.create_task(supa_upsert("bot_state", {
+            "id":"default","balance":self.balance,"start_balance":self.start_bal,
+            "total_trades":len(self.trades),
+            "updated_at":datetime.now(timezone.utc).isoformat()
+        }))
 
     # ── STATUS ───────────────────────────────────────────────────
     def status(self) -> BotStatus:
@@ -734,6 +773,46 @@ bot.set_broadcast(_broadcast)
 async def lifespan(app: FastAPI):
     logger.info("Starting DCA Bot...")
     await hl.start()
+    # Load settings from Supabase
+    rows = await supa_get("settings", {"id": "default"})
+    if rows:
+        s = rows[0]
+        for key in ["coin","balance","trade_pct","tp1","sl","trail_stop","rsi_entry","vol_mult"]:
+            if s.get(key) is not None and hasattr(bot.config, key):
+                setattr(bot.config, key, s[key])
+        if s.get("wallet_addr"):
+            import os; os.environ["HL_WALLET_ADDRESS"] = s["wallet_addr"]
+        logger.info("Settings loaded from Supabase")
+    # Load bot state
+    state = await supa_get("bot_state", {"id": "default"})
+    if state:
+        st = state[0]
+        bot.balance    = st.get("balance",    bot.config.balance)
+        bot.start_bal  = st.get("start_balance", bot.config.balance)
+        mode_str       = st.get("mode", "paper")
+        bot.config.mode = BotMode.LIVE if mode_str == "live" else BotMode.PAPER
+        await hl.switch_mode(bot.config.mode)
+        logger.info(f"State loaded | bal=${bot.balance:.4f} | mode={bot.config.mode}")
+    # Load trade history
+    trade_rows = await supa_get("trades")
+    if trade_rows:
+        for t in sorted(trade_rows, key=lambda x: x.get("closed_at",""), reverse=True)[:100]:
+            try:
+                bot.trades.append(ClosedTrade(
+                    id=t["trade_id"], coin=t["coin"],
+                    entry_price=t["entry_price"], exit_price=t["exit_price"],
+                    amount=t["amount"], entry_fee=t["entry_fee"], exit_fee=t["exit_fee"],
+                    gas_fee=t.get("gas_fee",0), swap_fee=t.get("swap_fee",0),
+                    maker_fee=t.get("maker_fee",0), taker_fee=t["taker_fee"],
+                    total_fees=t["total_fees"], gross_pnl=t["gross_pnl"],
+                    net_pnl=t["net_pnl"], pnl_pct=t["pnl_pct"],
+                    reason=TradeReason(t["reason"]),
+                    opened_at=datetime.fromisoformat(t["opened_at"]),
+                    closed_at=datetime.fromisoformat(t["closed_at"]),
+                    duration_seconds=t.get("duration_seconds",0)
+                ))
+            except Exception as e: logger.error(f"Trade load: {e}")
+        logger.info(f"Loaded {len(bot.trades)} trades from Supabase")
     yield
     await hl.stop()
     logger.info("Shutdown complete")
