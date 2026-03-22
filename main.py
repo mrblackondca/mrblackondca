@@ -367,10 +367,11 @@ class HyperLiquidService:
                     return round(float(b.get("total", 0)), 6)
         except Exception as e: logger.error(f"hl_balance: {e}")
         # Fallback: QuickNode on-chain USDC
-        if cfg.QUICKNODE_RPC_URL:
+        FREE_RPC = "https://arb1.arbitrum.io/rpc"
+if True:  # Free public RPC
             try:
                 padded = address.lower().replace("0x","").zfill(64)
-                r = await self._client.post(cfg.QUICKNODE_RPC_URL,
+                r = await self._client.post(FREE_RPC,
                     json={"jsonrpc":"2.0","id":1,"method":"eth_call",
                           "params":[{"to":cfg.USDC_CONTRACT,"data":"0x70a08231"+padded},"latest"]},
                     headers={"Content-Type": "application/json"})
