@@ -368,7 +368,7 @@ class HyperLiquidService:
         except Exception as e: logger.error(f"hl_balance: {e}")
         # Fallback: QuickNode on-chain USDC
         FREE_RPC = "https://arb1.arbitrum.io/rpc"
-if True:  # Free public RPC
+        if True:  # Free public RPC
             try:
                 padded = address.lower().replace("0x","").zfill(64)
                 r = await self._client.post(FREE_RPC,
