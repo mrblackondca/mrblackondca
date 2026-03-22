@@ -378,9 +378,11 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 
 <script>
 // ── BACKEND CONFIG ────────────────────────────────
-const SAVED = localStorage.getItem('beUrl') || '';
-let API    = SAVED ? `${SAVED}/api/v1` : null;
-let WS_URL = SAVED ? SAVED.replace('https://','wss://').replace('http://','ws://')+'/api/v1/ws' : null;
+// Auto-detect: UI aur backend same server pe hain!
+const ORIGIN = window.location.origin;
+const SAVED  = localStorage.getItem('beUrl') || ORIGIN;
+let API    = `${SAVED}/api/v1`;
+let WS_URL = SAVED.replace('https://','wss://').replace('http://','ws://')+'/api/v1/ws';
 
 // ── STATE ─────────────────────────────────────────
 const S = {
@@ -391,7 +393,7 @@ const S = {
   wallet:null, walletBal:null,
   theme:'dark',
   cfg:{pct:90,tp:1,sl:2,tpPct:50,trail:.5,rsi:45,vol:1.5},
-  ws:null, beOk:false, useBackend:!!SAVED
+  ws:null, beOk:false, useBackend:true
 };
 
 // ── BACKEND ───────────────────────────────────────
