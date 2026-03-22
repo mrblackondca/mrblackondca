@@ -873,6 +873,17 @@ async function resetPaper(){
   }
 }
 
+// ── TRADE AMOUNT CALCULATOR ──────────────────────
+function calcTradeAmt(){
+  const bal = parseFloat(document.getElementById('cBal')?.value) || 0;
+  const pct = parseFloat(document.getElementById('cPct')?.value) || 0;
+  const amt = bal * pct / 100;
+  const d = document.getElementById('tradeAmtDisplay');
+  const p = document.getElementById('tradeAmtPct');
+  if(d) d.textContent = '$' + amt.toFixed(2);
+  if(p) p.textContent = pct + '% of $' + bal.toFixed(2);
+}
+
 // ── TOAST ─────────────────────────────────────────
 function toast(msg,type='i'){
   const t=document.getElementById('tst'); t.textContent=msg; t.className=`tst ${type} show`;
@@ -885,7 +896,7 @@ const _theme=localStorage.getItem('theme')||'dark';
 S.theme=_theme;
 document.documentElement.setAttribute('data-theme',_theme);
 document.getElementById('themeBtn').textContent=_theme==='dark'?'🌙':'☀️';
-updateStats(); updateInds();
+updateStats(); updateInds(); setTimeout(calcTradeAmt, 500);
 const _saved=localStorage.getItem('beUrl');
 if(_saved){
   document.getElementById('beUrl').value=_saved;
